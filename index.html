@@ -1,0 +1,204 @@
+</html>
+	<head>
+		<style> @import './1.css'; </style>
+		<style> @import './location/location.css'; </style>
+	</head>
+	<body>
+		<div id="root" @mousedown="start" @mouseleave="mouseClick" @mouseup="mouseClick" @touchstart="start" @touchend="mouseClick" @touchcancel="mouseClick">
+			<div class='mybutton'> {{this.word}} </div>
+			<div v-if="this.adjustEnd" class='hismarker' v-bind:style="this.hismarker"> </div>
+			<gmap-map 
+			:center="this.center" 
+			:options="{minZoom: 5, maxZoom: 15}"
+			:zoom="this.zoom" 
+			ref="mmm" 
+			style="width: 100%; height: 100%" >
+				<template v-if='this.adjustRect'> <gmap-polyline v-bind:path.sync="path"> </template>
+			</gmap-map>
+		</div> 
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.5.0/vue.js"></script>
+		<script src="vue-google-maps.js"></script>
+		<script>
+			Vue.use(VueGoogleMaps, { load: { key: 'AIzaSyDf43lPdwlF98RCBsJOFNKOkoEjkwxb5Sc' }, });
+		
+			function fix(c1, c2) {
+				if (c2.lng < 0) c2.lng += 360
+				if (c2.lat < 0) c2.lat += 180
+				return [c1, c2]
+			}
+	
+			function unfix(c1, c2) {
+				if((c1.lat + c2.lat)/2 > 180) c2.lat -= 360
+				if((c1.lng + c2.lng)/2 > 180) c2.lat -= 180
+				return [c1, c2] 
+			}	
+	
+			function delta(v1, v2, v3) {
+				var d = { p1: - v1.lat + v3.lat, p2: -v1.lng + v3.lng, p3: -v2.lat + v3.lat, p4: -v2.lng + v3.lng };
+				return d;
+			}
+
+			function dist(c1, c2) {
+				let [v1, v2] = fix(c1, c2)
+				var d1 = v2.lat - v1.lat; if(v1.lat > 0 && v2.lat < 0) d1 += 360 
+				var d2 = v2.lng - v1.lng; if(v1.lng > 0 && v2.lng < 0) d2 += 180 
+				return Math.sqrt(d1*d1 + d2*d2);
+			}
+
+			function scale(v1, v2, sc) {
+				var p1 = { lat: Math.min(v1.lat, v2.lat), lng: Math.min(v1.lng, v2.lng) }
+				var p2 = { lat: Math.max(v1.lat, v2.lat), lng: Math.max(v1.lng, v2.lng) }
+				var p1s = { lat: p2.lat + (p1.lat - p2.lat)*sc, lng: p2.lng + (p1.lng - p2.lng)*sc }
+				var p2s = { lat: p1.lat + (p2.lat - p1.lat)*sc, lng: p1.lng + (p2.lng - p1.lng)*sc }
+				return [p1s, p2s]	
+			}
+
+			function lerp(x, x1, x2, y1, y2) {
+				var dx = x2 - x1
+				var dy = y2 - y1
+				return y1 + (dy/dx)*(x - x1)
+			}
+			
+			document.addEventListener('DOMContentLoaded', function() {
+				new Vue({
+					el: '#root',
+					data: { 
+						question: [	{ w: "Куликовская Битва", 		c: { lat: 53.641925, lng: 38.627960 } },
+												{ w: "Ледовое побоище", 			c: { lat: 58.634564, lng: 27.507453 } }, 
+												{ w: "Невская Битва", 				c: { lat: 59.802222, lng: 30.606111 } },
+												{ w: "Бородинское сражение", 	c: { lat: 55.516667, lng: 35.816667 } },
+												{ w: "Cтояние на реке Угре", 	c: { lat: 54.623750, lng: 35.986694 } },
+												{ w: "Cтояние на реке Угре", 	c: { lat: 54.623750, lng: 35.986694 } },
+												{ w: "Kурская битва", 				c: { lat: 51.016944, lng: 51.016944	} } ],
+						sc: 0.1,
+						iter: 1,
+						iter2: 0,
+						hold: false,
+						zoom: 10,
+						adjustRect: false,
+						adjustEnd: false,
+						zoomEnd: true,
+						moveEnd: true,
+						px: '100px',
+						py: '100px',
+						id: 0,
+						dist: 0,
+						word: "Куликовская Битва",
+						path: [
+							{ lat: 53.641925, lng: 38.627960 },
+							{ lat: 49.225944, lng: 158.012132 },
+						],
+						center: { lat: 55.754659, lng: 37.624656 },
+						prevc: { lat: 55.754659, lng: 37.624656 },
+					},
+					computed: {
+						hismarker: function() { return { top: this.py, left: this.px, } },
+						question_w: function() { return this.question[this.id].w },
+						question_c: function() { return this.question[this.id].c },
+					},
+					methods: {
+						start() { this.hold = true; this.updatePrev() },
+						stop() { this.hold = false; this.iter2 = 0 },
+						rectAnim() {
+							if(!this.adjustRect) return
+							if(!this.zoomEnd) { 
+								this.zoomTo(this.path[0], this.path[1], this.iter) 
+							} else if(!this.moveEnd) { 
+								this.moveTo(this.path[0], this.iter)
+							} else { 
+								this.adjustEnd = true; this.adjustRect = false; this.updatePrev(); this.word = Math.floor(this.dist*100)/100 + ' км'
+							}
+						},
+						tick() {
+							this.rectAnim()	
+							this.iter++;
+							if(this.hold) this.iter2++;	
+							this.changeQuestion()
+						},
+						moveTo(to, iter) {
+							var sc = 100
+							if(iter > sc) { this.moveEnd = true; return }
+							var d = { lat: to.lat - this.center.lat, lng: to.lng - this.center.lng }
+							var l = Math.sqrt(d.lat*d.lat + d.lng*d.lng)
+							if(l == 0) return 
+							d.lat /= l; d.lng /= l;
+							var s = 1 / ((sc-iter)/sc) / sc;
+							this.center = { lat: this.center.lat + l*d.lat*s, lng: this.center.lng + l*d.lng*s }
+						},
+						zoomTo(to1, to2, iter) {
+							var c = this.$refs.mmm.$mapObject.getBounds();
+							var b1 = { lat: c.Ra.g, lng: c.Ab.g };
+							var b2 = { lat: c.Ra.h, lng: c.Ab.h };
+							if(dist(b1, b2) < dist(to1, to2)*1.5 && this.zoom >= 5) {
+								this.zoom -= 0.1;
+							} else {
+								this.iter = 0
+								this.updateCenter()
+								this.zoomEnd = true;
+							}
+						},
+						updateCenter() {
+							var c = this.$refs.mmm.$mapObject.getCenter();
+							this.center = { lat: c.lat(), lng: c.lng() }
+						},
+						updatePrev() {
+							var c = this.$refs.mmm.$mapObject.getCenter();
+							var c2 = { lat: c.lat(), lng: c.lng() }
+							var changed = this.prevc.lat == c2.lat && this.prevc.lng == c2.lng;
+							this.prevc = c2;
+							return changed
+						},
+						changeQuestion() {
+							if(this.adjustEnd && !this.updatePrev()) { 
+								this.adjustEnd = false; 
+								this.id = (this.id + 1) % 7
+								this.word = this.question_w
+								Vue.set(this.path, 0, this.question_c )
+							}
+						},
+						mouseClick(event) {
+							if(this.iter2 > 20 && this.updatePrev()) {
+								this.toCrds(event.clientX, event.clientY)
+								this.px = '48%' 
+								this.py =	'38%' 
+								this.adjustEnd = false 
+								this.adjustRect = true
+								this.zoomEnd = false 
+								this.moveEnd = false 
+								this.zoom = this.$refs.mmm.$mapObject.getZoom();
+							}
+							this.iter2 = 0
+							this.hold = false
+						},
+						toCrds(x, y) {
+							var wd = window.innerWidth
+							var wh = window.innerHeight
+							var c = this.$refs.mmm.$mapObject.getBounds();
+							var d1 = { lat: c.Ab.g, lng: c.Ra.g };
+							var d2 = { lat: c.Ab.h, lng: c.Ra.h };
+							var [b1, b2] = fix(d1, d2)
+							var v1 = lerp(y, 0, wh, b2.lat, b1.lat)
+							var v2 = lerp(x, 0, wd, b1.lng, b2.lng)	
+							Vue.set(this.path, 1, { lat: v1, lng: v2 })
+							var d = this.haversine_distance(this.path[0], this.path[1])
+							this.dist = d 
+						},
+						haversine_distance(p1, p2) {
+							var R = 6371; 
+							var rlat1 = p1.lat * (Math.PI/180); 
+							var rlat2 = p2.lat * (Math.PI/180);
+							var difflat = rlat2-rlat1; 
+							var difflon = (p1.lng - p2.lng) * (Math.PI/180); 
+							var d = 2 * R * Math.asin(Math.sqrt(Math.sin(difflat/2)*Math.sin(difflat/2)+Math.cos(rlat1)*Math.cos(rlat2)*Math.sin(difflon/2)*Math.sin(difflon/2)));
+							return d;
+						},
+					},
+					created() {
+						document.addEventListener('click', this.mouseClick)		
+						setInterval( () => { this.tick(); }, 45);
+					},
+				});
+			});
+		</script>
+	</body>
+</html>

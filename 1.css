@@ -1,0 +1,22 @@
+@font-face {
+	font-family: 'myfont';
+	/* src: url('1.ttf') format('truetype'); /* D4RK-PH0ENiX: Tagir DP Normal: 2006 
+	src: url('2.ttf') format('truetype'); /* OptimusPrincepsCyr */*/
+}
+
+.mybutton {
+	z-index: 1;
+	position: absolute;
+	padding: 0.1vw;
+	border-radius: 1vw;
+	text-align: center;
+	display: inline-block;
+	left: 50%;
+	transform: translateX(-50%);
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), 10%, rgba(0, 0, 0, 0.0), 90%, rgba(255, 255, 255, 0.4));
+
+	font-family: 'myfont';
+	font-size: 5vw;
+	color: rgba(230, 160, 11, 1);
+	-webkit-text-stroke: 0.05vw black;
+}

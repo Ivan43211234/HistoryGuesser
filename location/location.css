@@ -1,0 +1,21 @@
+.hismarker {
+	position: absolute;
+	z-index: 3;
+	width: 4vw;
+	height: 4vw;
+	background-image: url('1.png');
+	background-size: contain;
+
+	animation: forwards;
+	animation-duration: .4s;
+	animation-name: tr;
+}
+
+@keyframes tr {
+	from {
+	}
+	60% { transform: scaleY(0.5) translateY(5vw); }
+	to {
+		transform: scaleY(0.7) translateY(3vw);
+	}
+}	
